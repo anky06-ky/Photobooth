@@ -1,6 +1,7 @@
 import base64
 import json
 import mimetypes
+import os
 import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -8,8 +9,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
-HOST = "127.0.0.1"
-PORT = 8000
+PORT = int(os.environ.get("PORT", "8000"))
+HOST = os.environ.get("HOST", "0.0.0.0" if "PORT" in os.environ else "127.0.0.1")
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "web"
 MODEL_DIR = ROOT_DIR / "models"
@@ -241,7 +242,8 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
 def main():
     init_storage()
     server = ThreadingHTTPServer((HOST, PORT), PhotoBoothHandler)
-    print(f"PhotoBooth web app: http://{HOST}:{PORT}")
+    display_host = "127.0.0.1" if HOST == "0.0.0.0" else HOST
+    print(f"PhotoBooth web app: http://{display_host}:{PORT}")
     print(f"Data manifest: {MANIFEST_PATH}")
     try:
         server.serve_forever()

@@ -16,6 +16,18 @@ http://127.0.0.1:8000
 
 Hoac bam `run_web.bat`.
 
+## Deploy online
+
+Repo da co san:
+
+- `Dockerfile`
+- `Procfile`
+- `render.yaml`
+
+Co the deploy len Render/Railway bang cach connect GitHub repo va chon web service. App tu doc bien moi truong `PORT` cua hosting.
+
+Luu y: ban luu tru hien tai dung `web_data/photos.json` va `web_data/photos/`. Tren hosting mien phi, du lieu co the mat khi service restart/redeploy neu khong gan persistent disk.
+
 ## Cach dung
 
 1. Bam `Bat camera`.
