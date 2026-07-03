@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Puzzle Cam Web</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="work-area">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Puzzle Cam Web</p>
+            <h1>Chup 3 tam, ghep puzzle, luu strip doc</h1>
+          </div>
+          <div class="status-pill" id="statusText">San sang</div>
+        </header>
+
+        <div class="stage-grid">
+          <section class="camera-panel">
+            <div class="video-wrap">
+              <video id="camera" autoplay playsinline muted></video>
+              <canvas id="previewCanvas" width="720" height="720" hidden></canvas>
+            </div>
+            <div class="button-row">
+              <button id="startCameraBtn" type="button">Bat camera</button>
+              <button id="captureBtn" type="button" disabled>Chup tam <span id="captureIndex">1</span>/3</button>
+              <button id="retakeBtn" type="button" disabled>Chup lai</button>
+            </div>
+          </section>
+
+          <section class="puzzle-panel">
+            <canvas id="puzzleCanvas" width="540" height="540"></canvas>
+            <div class="button-row">
+              <button id="shuffleBtn" type="button" disabled>Xao tron</button>
+              <button id="acceptBtn" type="button" disabled>Nhan tam nay</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <aside class="side-panel">
+        <section class="progress-panel">
+          <div class="section-heading">
+            <h2>Bo 3 tam</h2>
+            <span id="progressText">0/3</span>
+          </div>
+          <div class="shot-list" id="shotList"></div>
+          <button id="saveBtn" type="button" disabled>Luu strip vao database</button>
+        </section>
+
+        <section class="library-panel">
+          <div class="section-heading">
+            <h2>Thu vien</h2>
+            <button id="refreshBtn" type="button">Tai lai</button>
+          </div>
+          <div class="gallery" id="gallery"></div>
+        </section>
+      </aside>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
