@@ -1,0 +1,54 @@
+Cài thư viện: opencv-python, mediapipe, numpy, pillow.
+Tạo file chính main.py.
+Mở webcam bằng OpenCV: cv2.VideoCapture(0).
+Đọc từng frame từ camera.
+Lật ảnh ngang bằng cv2.flip(frame, 1) để giống soi gương.
+Dùng MediaPipe Hands để nhận diện bàn tay.
+Nếu chưa thấy tay thì hiện chữ “Đưa tay vào khung”.
+Nếu thấy tay thì lấy các điểm landmark của bàn tay.
+Vẽ skeleton bàn tay lên màn hình.
+Tạo khung chụp màu vàng ở giữa camera.
+Kiểm tra bàn tay có nằm trong vùng khung không.
+Nếu tay ổn định trong khung thì bắt đầu đếm ngược.
+Hiện countdown 3 → 2 → 1.
+Sau countdown thì chụp ảnh trong vùng khung vàng.
+Chuyển ảnh vừa chụp sang ảnh đen trắng bằng cv2.cvtColor.
+Resize ảnh về kích thước cố định, ví dụ 360x360.
+Cắt ảnh thành lưới 3x3.
+Tạo 9 mảnh puzzle.
+Lưu vị trí đúng của từng mảnh.
+Xáo trộn vị trí mảnh bằng random.shuffle.
+Hiển thị các mảnh puzzle lên cửa sổ OpenCV.
+Dùng landmark ngón cái và ngón trỏ để nhận diện cử chỉ pinch.
+Tính khoảng cách giữa đầu ngón cái và đầu ngón trỏ.
+Nếu khoảng cách nhỏ thì xem như đang “kẹp” mảnh.
+Khi pinch trúng mảnh thì cho kéo mảnh theo tay.
+Khi thả gần vị trí đúng thì tự snap mảnh vào ô chuẩn.
+Cập nhật số mảnh đúng, ví dụ 2/9, 5/9, 9/9.
+Khi đủ 9/9 thì puzzle hoàn thành.
+Lưu ảnh hoàn thành vào danh sách ảnh đã chụp.
+Quay lại bước chụp để làm ảnh tiếp theo.
+Lặp lại đến khi có đủ 3 ảnh.
+Ghép 3 ảnh theo chiều dọc thành một ảnh strip.
+Lưu file strip bằng cv2.imwrite("puzzlecam_strip.png", strip).
+Có phím R để reset toàn bộ.
+Có phím Q để thoát chương trình.
+
+Cấu trúc code Python nên chia như này:
+detect_hand(frame)
+is_pinching(landmarks)
+draw_capture_box(frame)
+start_countdown()
+capture_photo(frame)
+create_puzzle(image)
+draw_puzzle(frame, pieces)
+handle_drag_by_hand(landmarks)
+check_snap(piece)
+is_puzzle_completed()
+save_completed_photo()
+create_photo_strip()
+reset_all()
+
+Repo Github để quản lý code: 
+https://github.com/anky06-ky/Photobooth.git
+

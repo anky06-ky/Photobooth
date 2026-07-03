@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+photos/
+_video_frames/
+puzzlecam_strip.png
