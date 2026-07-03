@@ -11,6 +11,7 @@ const captureBtn = document.getElementById("captureBtn");
 const captureIndex = document.getElementById("captureIndex");
 const retakeBtn = document.getElementById("retakeBtn");
 const shuffleBtn = document.getElementById("shuffleBtn");
+const solveBtn = document.getElementById("solveBtn");
 const handBtn = document.getElementById("handBtn");
 const handStatus = document.getElementById("handStatus");
 const acceptBtn = document.getElementById("acceptBtn");
@@ -47,7 +48,9 @@ function setStatus(text) {
 
 function updateProgress() {
   progressText.textContent = `${acceptedShots.length}/${SHOT_COUNT}`;
-  captureIndex.textContent = Math.min(acceptedShots.length + 1, SHOT_COUNT);
+  const nextShot = Math.min(acceptedShots.length + 1, SHOT_COUNT);
+  captureIndex.textContent = nextShot;
+  acceptBtn.textContent = `Luu tam ${nextShot}/3`;
   saveBtn.disabled = acceptedShots.length !== SHOT_COUNT;
   renderShotSlots();
 }
@@ -144,6 +147,7 @@ function retakePhoto() {
   captureBtn.disabled = !stream || acceptedShots.length >= SHOT_COUNT;
   retakeBtn.disabled = true;
   shuffleBtn.disabled = true;
+  solveBtn.disabled = true;
   acceptBtn.disabled = true;
   drawEmptyPuzzle("Chup lai tam nay");
   setStatus(`San sang chup tam ${acceptedShots.length + 1}/3`);
@@ -165,7 +169,8 @@ async function createPuzzle(dataUrl) {
   buildPieces();
   shufflePieces();
   shuffleBtn.disabled = false;
-  acceptBtn.disabled = true;
+  solveBtn.disabled = false;
+  acceptBtn.disabled = false;
   drawPuzzle();
 }
 
@@ -201,8 +206,22 @@ function shufflePieces() {
     movePieceToSlot(piece, slots[index]);
   });
   solved = false;
-  acceptBtn.disabled = true;
+  solveBtn.disabled = false;
+  acceptBtn.disabled = !currentPhoto;
   setStatus(`Dang ghep tam ${acceptedShots.length + 1}/3`);
+  drawPuzzle();
+}
+
+function solvePuzzle() {
+  if (!pieces.length || !currentPhoto) {
+    return;
+  }
+  for (const piece of pieces) {
+    movePieceToSlot(piece, piece.correctSlot);
+  }
+  solved = true;
+  acceptBtn.disabled = false;
+  setStatus(`Tam ${acceptedShots.length + 1}/3 da ghep xong`);
   drawPuzzle();
 }
 
@@ -252,7 +271,7 @@ function drawPuzzle() {
     puzzleCtx.fillStyle = "#07150d";
     puzzleCtx.font = "800 18px system-ui, sans-serif";
     puzzleCtx.textAlign = "center";
-    puzzleCtx.fillText("Da ghep xong - nhan tam nay", BOARD_SIZE / 2, 29);
+    puzzleCtx.fillText("Da ghep xong - luu tam nay", BOARD_SIZE / 2, 29);
   }
 
   if (handControlsActive && handCursor) {
@@ -350,7 +369,7 @@ function endDrag(event) {
 
 function checkSolved() {
   solved = pieces.length > 0 && pieces.every((piece) => piece.slot === piece.correctSlot);
-  acceptBtn.disabled = !solved;
+  acceptBtn.disabled = !currentPhoto;
   if (solved) {
     setStatus(`Tam ${acceptedShots.length + 1}/3 da ghep xong`);
   }
@@ -440,7 +459,7 @@ function handleHandResults(results) {
   handleHandPinch(pinch, handCursor);
   handleHandLike(like);
 
-  if (like && solved) {
+  if (like && currentPhoto) {
     handStatus.textContent = "Tay: Like de nhan";
   } else if (pinch) {
     handStatus.textContent = "Tay: dang kep";
@@ -518,7 +537,7 @@ function handleHandPinch(isPinching, point) {
 
 function handleHandLike(isLike) {
   const now = performance.now();
-  if (!isLike || !solved || dragPiece || now < likeCooldownUntil) {
+  if (!isLike || !currentPhoto || dragPiece || now < likeCooldownUntil) {
     if (!isLike) {
       likeHoldStart = 0;
     }
@@ -557,7 +576,7 @@ function makePhotoCard(dataUrl, shotNumber) {
 }
 
 async function acceptCurrentShot() {
-  if (!solved || !currentPhoto || acceptedShots.length >= SHOT_COUNT) {
+  if (!currentPhoto || acceptedShots.length >= SHOT_COUNT) {
     return;
   }
 
@@ -573,6 +592,7 @@ async function acceptCurrentShot() {
   solved = false;
   retakeBtn.disabled = true;
   shuffleBtn.disabled = true;
+  solveBtn.disabled = true;
   acceptBtn.disabled = true;
 
   if (acceptedShots.length < SHOT_COUNT) {
@@ -702,6 +722,7 @@ startCameraBtn.addEventListener("click", startCamera);
 captureBtn.addEventListener("click", capturePhoto);
 retakeBtn.addEventListener("click", retakePhoto);
 shuffleBtn.addEventListener("click", shufflePieces);
+solveBtn.addEventListener("click", solvePuzzle);
 handBtn.addEventListener("click", startHandControls);
 acceptBtn.addEventListener("click", acceptCurrentShot);
 saveBtn.addEventListener("click", saveSession);

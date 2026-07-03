@@ -21,7 +21,7 @@ Hoac bam `run_web.bat`.
 1. Bam `Bat camera`.
 2. Bam `Chup tam 1/3`.
 3. Keo tha cac manh puzzle de ghep dung anh.
-4. Bam `Nhan tam nay`.
+4. Bam `Nhan tam nay` de luu tam tam hien tai vao bo 3 tam. Co the bam `Tu ghep xong` neu muon app xep puzzle nhanh.
 5. Lap lai cho tam 2 va tam 3.
 6. Khi du 3 tam, bam `Luu strip vao database`.
 
@@ -31,7 +31,7 @@ Hoac bam `run_web.bat`.
 2. Dua tay vao camera.
 3. Kep ngon cai + ngon tro de nam va keo manh puzzle.
 4. Tha kep de dat manh vao o gan nhat.
-5. Khi ghep xong, gio dau `Like` khoang nua giay de nhan tam hien tai.
+5. Gio dau `Like` khoang nua giay de nhan tam hien tai.
 
 Nut `Nhan tam nay` van nam o cot phai de dung du phong neu tracking tay chua on.
 Tinh nang tay can internet de tai thu vien MediaPipe web lan dau.

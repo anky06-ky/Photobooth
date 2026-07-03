@@ -151,7 +151,7 @@ video {
 
 .puzzle-toolbar {
   display: grid;
-  grid-template-columns: 120px 1fr auto;
+  grid-template-columns: 108px 142px 1fr auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 12px;
