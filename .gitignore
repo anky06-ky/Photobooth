@@ -1,6 +1,8 @@
 __pycache__/
 *.py[cod]
+node_modules/
 photos/
 _video_frames/
 puzzlecam_strip.png
 web_data/
+web/models/

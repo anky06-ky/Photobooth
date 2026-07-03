@@ -1,0 +1,22 @@
+[build]
+  command = "npm run build"
+  publish = "web"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/photos/:id"
+  to = "/.netlify/functions/photos/:id"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/photos"
+  to = "/.netlify/functions/photos"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/saved/:filename"
+  to = "/.netlify/functions/photos/saved/:filename"
+  status = 200
+  force = true

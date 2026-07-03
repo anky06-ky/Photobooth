@@ -16,17 +16,17 @@ http://127.0.0.1:8000
 
 Hoac bam `run_web.bat`.
 
-## Deploy online
+## Deploy online tren Netlify
 
 Repo da co san:
 
-- `Dockerfile`
-- `Procfile`
-- `render.yaml`
+- `netlify.toml`
+- `netlify/functions/photos.js`
+- `package.json`
 
-Co the deploy len Render/Railway bang cach connect GitHub repo va chon web service. App tu doc bien moi truong `PORT` cua hosting.
+Netlify se publish folder `web/`, route `/api/photos` vao Netlify Function, va luu anh online bang Netlify Blobs.
 
-Luu y: ban luu tru hien tai dung `web_data/photos.json` va `web_data/photos/`. Tren hosting mien phi, du lieu co the mat khi service restart/redeploy neu khong gan persistent disk.
+Neu Netlify dang hien 404, vao project va trigger `Deploys -> Trigger deploy -> Clear cache and deploy site` de Netlify doc lai `netlify.toml`.
 
 ## Cach dung
 
@@ -48,7 +48,7 @@ Luu y: ban luu tru hien tai dung `web_data/photos.json` va `web_data/photos/`. T
 Nut `Nhan tam nay` van nam o cot phai de dung du phong neu tracking tay chua on.
 Tinh nang tay can internet de tai thu vien MediaPipe web lan dau.
 
-App se luu:
+Khi chay local bang `python web_server.py`, app se luu:
 
 - Anh strip doc 3 tam.
 - 3 anh rieng trong bo chup.
