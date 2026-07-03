@@ -23,7 +23,7 @@ Hoac bam `run_web.bat`.
 3. Keo tha cac manh puzzle de ghep dung anh.
 4. Bam `Nhan tam nay` de luu tam tam hien tai vao bo 3 tam. Co the bam `Tu ghep xong` neu muon app xep puzzle nhanh.
 5. Lap lai cho tam 2 va tam 3.
-6. Khi du 3 tam, bam `Luu strip vao database`.
+6. Khi du 3 tam, bam `Luu strip vao thu vien`.
 
 ## Dieu khien bang tay
 
@@ -40,12 +40,12 @@ App se luu:
 
 - Anh strip doc 3 tam.
 - 3 anh rieng trong bo chup.
-- Metadata trong SQLite database.
+- Metadata trong file JSON de de mo va kiem tra.
 
 Du lieu nam trong:
 
 ```text
-web_data/photobooth.sqlite3
+web_data/photos.json
 web_data/photos/
 ```
 

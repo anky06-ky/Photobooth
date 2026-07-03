@@ -628,7 +628,7 @@ async function saveSession() {
   }
 
   saveBtn.disabled = true;
-  setStatus("Dang luu vao database");
+  setStatus("Dang luu vao thu vien");
   try {
     const strip = await makeStrip();
     const response = await fetch("/api/photos", {
@@ -648,7 +648,7 @@ async function saveSession() {
     updateProgress();
     captureBtn.disabled = !stream;
     drawEmptyPuzzle("Da luu - chup bo moi");
-    setStatus("Da luu strip vao database");
+    setStatus("Da luu strip vao thu vien");
     await loadGallery();
   } catch (error) {
     console.error(error);

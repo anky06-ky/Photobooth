@@ -2,7 +2,6 @@ import base64
 import json
 import mimetypes
 import re
-import sqlite3
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,37 +15,45 @@ WEB_DIR = ROOT_DIR / "web"
 MODEL_DIR = ROOT_DIR / "models"
 DATA_DIR = ROOT_DIR / "web_data"
 PHOTO_DIR = DATA_DIR / "photos"
-DB_PATH = DATA_DIR / "photobooth.sqlite3"
+MANIFEST_PATH = DATA_DIR / "photos.json"
 DATA_URL_RE = re.compile(r"^data:image/(?P<ext>png|jpeg|jpg);base64,(?P<data>.+)$")
 
 
 def init_storage():
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS photo_sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at TEXT NOT NULL,
-                strip_filename TEXT NOT NULL,
-                shot_filenames TEXT NOT NULL
-            )
-            """
-        )
-        conn.commit()
+    if not MANIFEST_PATH.exists():
+        save_manifest({"next_id": 1, "sessions": []})
 
 
-def db_rows():
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT id, created_at, strip_filename, shot_filenames
-            FROM photo_sessions
-            ORDER BY id DESC
-            """
-        ).fetchall()
-    return rows
+def load_manifest():
+    init_storage()
+    try:
+        return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"next_id": 1, "sessions": []}
+
+
+def save_manifest(manifest):
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    temp_path = MANIFEST_PATH.with_suffix(".tmp")
+    temp_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    temp_path.replace(MANIFEST_PATH)
+
+
+def session_response(session):
+    shots = session["shotFilenames"]
+    return {
+        "id": session["id"],
+        "createdAt": session["createdAt"],
+        "stripUrl": photo_url(session["stripFilename"]),
+        "stripFilename": session["stripFilename"],
+        "shots": [photo_url(filename) for filename in shots],
+        "shotFilenames": shots,
+    }
 
 
 def photo_url(filename):
@@ -145,20 +152,8 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def send_photos(self):
-        rows = db_rows()
-        sessions = []
-        for row in rows:
-            shots = json.loads(row["shot_filenames"])
-            sessions.append(
-                {
-                    "id": row["id"],
-                    "createdAt": row["created_at"],
-                    "stripUrl": photo_url(row["strip_filename"]),
-                    "stripFilename": row["strip_filename"],
-                    "shots": [photo_url(filename) for filename in shots],
-                    "shotFilenames": shots,
-                }
-            )
+        manifest = load_manifest()
+        sessions = [session_response(session) for session in manifest.get("sessions", [])]
         self.send_json({"sessions": sessions})
 
     def save_photo_session(self):
@@ -182,28 +177,19 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             strip_filename = f"strip_{unique}.{ext}"
             (PHOTO_DIR / strip_filename).write_bytes(strip_bytes)
             created_at = time.strftime("%Y-%m-%d %H:%M:%S")
+            manifest = load_manifest()
+            session_id = int(manifest.get("next_id", 1))
+            session = {
+                "id": session_id,
+                "createdAt": created_at,
+                "stripFilename": strip_filename,
+                "shotFilenames": shot_filenames,
+            }
+            manifest["next_id"] = session_id + 1
+            manifest.setdefault("sessions", []).insert(0, session)
+            save_manifest(manifest)
 
-            with sqlite3.connect(DB_PATH) as conn:
-                cursor = conn.execute(
-                    """
-                    INSERT INTO photo_sessions (created_at, strip_filename, shot_filenames)
-                    VALUES (?, ?, ?)
-                    """,
-                    (created_at, strip_filename, json.dumps(shot_filenames)),
-                )
-                conn.commit()
-
-            self.send_json(
-                {
-                    "id": cursor.lastrowid,
-                    "createdAt": created_at,
-                    "stripUrl": photo_url(strip_filename),
-                    "stripFilename": strip_filename,
-                    "shots": [photo_url(filename) for filename in shot_filenames],
-                    "shotFilenames": shot_filenames,
-                },
-                status=201,
-            )
+            self.send_json(session_response(session), status=201)
         except Exception as exc:
             self.send_json({"error": str(exc)}, status=400)
 
@@ -214,19 +200,20 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "Invalid id"}, status=400)
             return
 
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            row = conn.execute(
-                "SELECT strip_filename, shot_filenames FROM photo_sessions WHERE id = ?",
-                (session_id_int,),
-            ).fetchone()
-            if row is None:
-                self.send_json({"error": "Not found"}, status=404)
-                return
-            conn.execute("DELETE FROM photo_sessions WHERE id = ?", (session_id_int,))
-            conn.commit()
+        manifest = load_manifest()
+        sessions = manifest.get("sessions", [])
+        match_index = next(
+            (index for index, session in enumerate(sessions) if int(session.get("id", -1)) == session_id_int),
+            None,
+        )
+        if match_index is None:
+            self.send_json({"error": "Not found"}, status=404)
+            return
 
-        filenames = [row["strip_filename"], *json.loads(row["shot_filenames"])]
+        session = sessions.pop(match_index)
+        save_manifest(manifest)
+
+        filenames = [session["stripFilename"], *session["shotFilenames"]]
         for filename in filenames:
             target = PHOTO_DIR / Path(filename).name
             if target.exists():
@@ -255,7 +242,7 @@ def main():
     init_storage()
     server = ThreadingHTTPServer((HOST, PORT), PhotoBoothHandler)
     print(f"PhotoBooth web app: http://{HOST}:{PORT}")
-    print(f"Database: {DB_PATH}")
+    print(f"Data manifest: {MANIFEST_PATH}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
