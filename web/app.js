@@ -11,6 +11,8 @@ const captureBtn = document.getElementById("captureBtn");
 const captureIndex = document.getElementById("captureIndex");
 const retakeBtn = document.getElementById("retakeBtn");
 const shuffleBtn = document.getElementById("shuffleBtn");
+const handBtn = document.getElementById("handBtn");
+const handStatus = document.getElementById("handStatus");
 const acceptBtn = document.getElementById("acceptBtn");
 const saveBtn = document.getElementById("saveBtn");
 const refreshBtn = document.getElementById("refreshBtn");
@@ -30,6 +32,14 @@ let dragPiece = null;
 let dragOffset = { x: 0, y: 0 };
 let solved = false;
 let acceptedShots = [];
+let handLandmarker = null;
+let handControlsActive = false;
+let lastVideoTime = -1;
+let handCursor = null;
+let handPinching = false;
+let wasHandPinching = false;
+let likeHoldStart = 0;
+let likeCooldownUntil = 0;
 
 function setStatus(text) {
   statusText.textContent = text;
@@ -244,6 +254,16 @@ function drawPuzzle() {
     puzzleCtx.textAlign = "center";
     puzzleCtx.fillText("Da ghep xong - nhan tam nay", BOARD_SIZE / 2, 29);
   }
+
+  if (handControlsActive && handCursor) {
+    puzzleCtx.beginPath();
+    puzzleCtx.arc(handCursor.x, handCursor.y, handPinching ? 15 : 11, 0, Math.PI * 2);
+    puzzleCtx.fillStyle = handPinching ? "rgba(124, 201, 111, 0.92)" : "rgba(255, 211, 106, 0.92)";
+    puzzleCtx.fill();
+    puzzleCtx.lineWidth = 3;
+    puzzleCtx.strokeStyle = "#111516";
+    puzzleCtx.stroke();
+  }
 }
 
 function canvasPoint(event) {
@@ -267,32 +287,30 @@ function pieceAt(point) {
   return null;
 }
 
-function startDrag(event) {
+function beginPieceDrag(point) {
   if (!pieces.length || solved) {
-    return;
+    return false;
   }
-  const point = canvasPoint(event);
   const piece = pieceAt(point);
   if (!piece) {
-    return;
+    return false;
   }
   dragPiece = piece;
   dragOffset = { x: point.x - piece.x, y: point.y - piece.y };
-  puzzleCanvas.setPointerCapture(event.pointerId);
+  return true;
 }
 
-function moveDrag(event) {
+function movePieceDrag(point) {
   if (!dragPiece) {
     return;
   }
   const tile = BOARD_SIZE / GRID;
-  const point = canvasPoint(event);
   dragPiece.x = Math.max(0, Math.min(BOARD_SIZE - tile, point.x - dragOffset.x));
   dragPiece.y = Math.max(0, Math.min(BOARD_SIZE - tile, point.y - dragOffset.y));
   drawPuzzle();
 }
 
-function endDrag(event) {
+function releasePieceDrag() {
   if (!dragPiece) {
     return;
   }
@@ -308,9 +326,26 @@ function endDrag(event) {
   }
   movePieceToSlot(dragPiece, targetSlot);
   dragPiece = null;
-  puzzleCanvas.releasePointerCapture(event.pointerId);
   checkSolved();
   drawPuzzle();
+}
+
+function startDrag(event) {
+  if (beginPieceDrag(canvasPoint(event))) {
+    puzzleCanvas.setPointerCapture(event.pointerId);
+  }
+}
+
+function moveDrag(event) {
+  movePieceDrag(canvasPoint(event));
+}
+
+function endDrag(event) {
+  const hadPiece = Boolean(dragPiece);
+  releasePieceDrag();
+  if (hadPiece && puzzleCanvas.hasPointerCapture(event.pointerId)) {
+    puzzleCanvas.releasePointerCapture(event.pointerId);
+  }
 }
 
 function checkSolved() {
@@ -318,6 +353,186 @@ function checkSolved() {
   acceptBtn.disabled = !solved;
   if (solved) {
     setStatus(`Tam ${acceptedShots.length + 1}/3 da ghep xong`);
+  }
+}
+
+async function startHandControls() {
+  if (handControlsActive) {
+    return;
+  }
+
+  handBtn.disabled = true;
+  handBtn.textContent = "Dang tai tay...";
+  handStatus.textContent = "Tay: dang tai";
+
+  try {
+    if (!stream) {
+      await startCamera();
+    }
+    if (!stream) {
+      throw new Error("Camera is not ready.");
+    }
+
+    const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm");
+    const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+    );
+    handLandmarker = await vision.HandLandmarker.createFromOptions(filesetResolver, {
+      baseOptions: {
+        modelAssetPath: "/models/hand_landmarker.task",
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.62,
+      minHandPresenceConfidence: 0.62,
+      minTrackingConfidence: 0.62,
+    });
+
+    handControlsActive = true;
+    handBtn.disabled = false;
+    handBtn.textContent = "Dieu khien tay dang bat";
+    handStatus.textContent = "Tay: dua vao camera";
+    requestAnimationFrame(trackHands);
+  } catch (error) {
+    console.error(error);
+    handBtn.disabled = false;
+    handBtn.textContent = "Bat dieu khien tay";
+    handStatus.textContent = "Tay: loi tai";
+    setStatus("Khong bat duoc dieu khien tay");
+  }
+}
+
+function trackHands() {
+  if (!handControlsActive || !handLandmarker) {
+    return;
+  }
+
+  if (camera.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && camera.currentTime !== lastVideoTime) {
+    lastVideoTime = camera.currentTime;
+    const results = handLandmarker.detectForVideo(camera, performance.now());
+    handleHandResults(results);
+  }
+
+  requestAnimationFrame(trackHands);
+}
+
+function handleHandResults(results) {
+  const landmarks = results.landmarks && results.landmarks[0];
+  if (!landmarks) {
+    if (wasHandPinching) {
+      releasePieceDrag();
+    }
+    handCursor = null;
+    handPinching = false;
+    wasHandPinching = false;
+    likeHoldStart = 0;
+    handStatus.textContent = "Tay: chua thay";
+    drawPuzzle();
+    return;
+  }
+
+  const point = handControlPoint(landmarks);
+  const pinch = landmarkDistance(landmarks[4], landmarks[8]) < 0.065;
+  const like = isLikeGesture(landmarks);
+  handCursor = smoothHandPoint(point);
+  handPinching = pinch;
+
+  handleHandPinch(pinch, handCursor);
+  handleHandLike(like);
+
+  if (like && solved) {
+    handStatus.textContent = "Tay: Like de nhan";
+  } else if (pinch) {
+    handStatus.textContent = "Tay: dang kep";
+  } else {
+    handStatus.textContent = "Tay: dang theo doi";
+  }
+  drawPuzzle();
+}
+
+function handControlPoint(landmarks) {
+  const x = (landmarks[4].x + landmarks[8].x) / 2;
+  const y = (landmarks[4].y + landmarks[8].y) / 2;
+  return {
+    x: Math.max(0, Math.min(BOARD_SIZE, (1 - x) * BOARD_SIZE)),
+    y: Math.max(0, Math.min(BOARD_SIZE, y * BOARD_SIZE)),
+  };
+}
+
+function smoothHandPoint(point) {
+  if (!handCursor) {
+    return point;
+  }
+  const alpha = 0.42;
+  return {
+    x: handCursor.x * (1 - alpha) + point.x * alpha,
+    y: handCursor.y * (1 - alpha) + point.y * alpha,
+  };
+}
+
+function landmarkDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function isLikeGesture(landmarks) {
+  const pinch = landmarkDistance(landmarks[4], landmarks[8]);
+  if (pinch < 0.11) {
+    return false;
+  }
+
+  const folded = [
+    [8, 6],
+    [12, 10],
+    [16, 14],
+    [20, 18],
+  ].filter(([tip, pip]) => landmarks[tip].y > landmarks[pip].y - 0.01).length;
+
+  const thumbUp =
+    landmarks[4].y < landmarks[3].y - 0.035 &&
+    landmarks[4].y < landmarks[2].y - 0.065 &&
+    landmarkDistance(landmarks[4], landmarks[0]) > landmarkDistance(landmarks[2], landmarks[0]) + 0.08;
+
+  return thumbUp && folded >= 3;
+}
+
+function handleHandPinch(isPinching, point) {
+  if (!pieces.length || solved) {
+    if (wasHandPinching) {
+      releasePieceDrag();
+    }
+    wasHandPinching = isPinching;
+    return;
+  }
+
+  if (isPinching) {
+    if (!wasHandPinching) {
+      beginPieceDrag(point);
+    }
+    movePieceDrag(point);
+  } else if (wasHandPinching) {
+    releasePieceDrag();
+  }
+
+  wasHandPinching = isPinching;
+}
+
+function handleHandLike(isLike) {
+  const now = performance.now();
+  if (!isLike || !solved || dragPiece || now < likeCooldownUntil) {
+    if (!isLike) {
+      likeHoldStart = 0;
+    }
+    return;
+  }
+
+  if (!likeHoldStart) {
+    likeHoldStart = now;
+  }
+
+  if (now - likeHoldStart >= 550) {
+    likeCooldownUntil = now + 1500;
+    likeHoldStart = 0;
+    acceptCurrentShot();
   }
 }
 
@@ -487,6 +702,7 @@ startCameraBtn.addEventListener("click", startCamera);
 captureBtn.addEventListener("click", capturePhoto);
 retakeBtn.addEventListener("click", retakePhoto);
 shuffleBtn.addEventListener("click", shufflePieces);
+handBtn.addEventListener("click", startHandControls);
 acceptBtn.addEventListener("click", acceptCurrentShot);
 saveBtn.addEventListener("click", saveSession);
 refreshBtn.addEventListener("click", loadGallery);

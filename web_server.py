@@ -6,13 +6,14 @@ import sqlite3
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 
 HOST = "127.0.0.1"
 PORT = 8000
 ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "web"
+MODEL_DIR = ROOT_DIR / "models"
 DATA_DIR = ROOT_DIR / "web_data"
 PHOTO_DIR = DATA_DIR / "photos"
 DB_PATH = DATA_DIR / "photobooth.sqlite3"
@@ -81,6 +82,9 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
         if parsed.path.startswith("/saved/"):
             self.send_saved_photo(parsed.path.removeprefix("/saved/"))
             return
+        if parsed.path.startswith("/models/"):
+            self.send_model_file(parsed.path.removeprefix("/models/"))
+            return
         self.send_static(parsed.path)
 
     def do_POST(self):
@@ -118,6 +122,20 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "Not found"}, status=404)
             return
         content_type = mimetypes.guess_type(str(target))[0] or "image/png"
+        data = target.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def send_model_file(self, filename):
+        safe_name = Path(filename).name
+        target = (MODEL_DIR / safe_name).resolve()
+        if not str(target).startswith(str(MODEL_DIR.resolve())) or not target.exists():
+            self.send_json({"error": "Not found"}, status=404)
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         data = target.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", content_type)

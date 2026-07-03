@@ -31,11 +31,12 @@
           </section>
 
           <section class="puzzle-panel">
-            <canvas id="puzzleCanvas" width="540" height="540"></canvas>
-            <div class="button-row">
+            <div class="puzzle-toolbar">
               <button id="shuffleBtn" type="button" disabled>Xao tron</button>
-              <button id="acceptBtn" type="button" disabled>Nhan tam nay</button>
+              <button id="handBtn" type="button">Bat dieu khien tay</button>
+              <span id="handStatus">Tay: tat</span>
             </div>
+            <canvas id="puzzleCanvas" width="540" height="540"></canvas>
           </section>
         </div>
       </section>
@@ -47,6 +48,7 @@
             <span id="progressText">0/3</span>
           </div>
           <div class="shot-list" id="shotList"></div>
+          <button id="acceptBtn" type="button" disabled>Nhan tam nay</button>
           <button id="saveBtn" type="button" disabled>Luu strip vao database</button>
         </section>
 

@@ -25,6 +25,17 @@ Hoac bam `run_web.bat`.
 5. Lap lai cho tam 2 va tam 3.
 6. Khi du 3 tam, bam `Luu strip vao database`.
 
+## Dieu khien bang tay
+
+1. Bam `Bat dieu khien tay`.
+2. Dua tay vao camera.
+3. Kep ngon cai + ngon tro de nam va keo manh puzzle.
+4. Tha kep de dat manh vao o gan nhat.
+5. Khi ghep xong, gio dau `Like` khoang nua giay de nhan tam hien tai.
+
+Nut `Nhan tam nay` van nam o cot phai de dung du phong neu tracking tay chua on.
+Tinh nang tay can internet de tai thu vien MediaPipe web lan dau.
+
 App se luu:
 
 - Anh strip doc 3 tam.

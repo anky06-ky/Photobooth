@@ -149,8 +149,20 @@ video {
   margin-top: 12px;
 }
 
-.puzzle-panel .button-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.puzzle-toolbar {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.puzzle-toolbar span {
+  min-width: 86px;
+  color: #ffd36a;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
 }
 
 .side-panel {
@@ -212,8 +224,22 @@ video {
   font-weight: 800;
 }
 
+#acceptBtn,
 #saveBtn {
   width: 100%;
+}
+
+#acceptBtn {
+  margin-bottom: 10px;
+  background: #155043;
+  border-color: #237a69;
+}
+
+#acceptBtn:hover:not(:disabled) {
+  background: #1c6656;
+}
+
+#saveBtn {
   background: #705f14;
   border-color: #a88e24;
 }
