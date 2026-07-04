@@ -7,6 +7,7 @@ const CAMERA_IDEAL_HEIGHT = window.matchMedia("(max-width: 760px)").matches ? 72
 const PHOTO_FORMAT = "image/jpeg";
 const PHOTO_QUALITY = 0.82;
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
+const BRAND_NAME = "PHOTOBOOTH";
 
 const camera = document.getElementById("camera");
 const previewCanvas = document.getElementById("previewCanvas");
@@ -596,7 +597,7 @@ function makePhotoCard(dataUrl, shotNumber) {
     ctx.fillStyle = "#181513";
     ctx.font = "700 22px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("PUZZLE-CAM", canvas.width / 2, 305);
+    ctx.fillText(BRAND_NAME, canvas.width / 2, 305);
     ctx.font = "600 15px system-ui, sans-serif";
     ctx.fillText(`Tam ${shotNumber}/3 - ${new Date().toLocaleTimeString()}`, canvas.width / 2, 332);
     return canvasToUploadUrl(canvas, PHOTO_QUALITY);
