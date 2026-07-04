@@ -17,6 +17,7 @@ function jsonResponse(payload, statusCode = 200) {
 }
 
 function fileResponse(bytes, contentType) {
+  const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
   return {
     statusCode: 200,
     isBase64Encoded: true,
@@ -24,7 +25,7 @@ function fileResponse(bytes, contentType) {
       "Content-Type": contentType,
       "Cache-Control": "public, max-age=31536000, immutable",
     },
-    body: Buffer.from(bytes).toString("base64"),
+    body: buffer.toString("base64"),
   };
 }
 
@@ -33,6 +34,10 @@ function notFound() {
 }
 
 function tailFromPath(path) {
+  if (path.startsWith("/saved/")) {
+    return path;
+  }
+
   for (const marker of ["/.netlify/functions/photos", "/api/photos"]) {
     if (path.startsWith(marker)) {
       return path.slice(marker.length);

@@ -728,9 +728,10 @@ async function loadGallery() {
     actions.className = "gallery-actions";
 
     const download = document.createElement("a");
+    const extension = (session.stripFilename.split(".").pop() || "jpg").toUpperCase();
     download.href = session.stripUrl;
     download.download = session.stripFilename;
-    download.textContent = "Tai PNG";
+    download.textContent = `Tai ${extension}`;
     actions.appendChild(download);
 
     const del = document.createElement("button");
