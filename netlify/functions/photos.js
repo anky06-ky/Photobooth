@@ -1,4 +1,4 @@
-import { getStore } from "@netlify/blobs";
+import { connectLambda, getStore } from "@netlify/blobs";
 
 const DATA_STORE = "photobooth-data";
 const IMAGE_STORE = "photobooth-images";
@@ -177,6 +177,10 @@ export const handler = async (event) => {
   try {
     if (event.httpMethod === "OPTIONS") {
       return jsonResponse({ ok: true });
+    }
+
+    if (event.blobs) {
+      connectLambda(event);
     }
 
     const dataStore = getStore(DATA_STORE);
