@@ -6,7 +6,7 @@ import re
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 
 PORT = int(os.environ.get("PORT", "8000"))
@@ -15,52 +15,62 @@ ROOT_DIR = Path(__file__).resolve().parent
 WEB_DIR = ROOT_DIR / "web"
 MODEL_DIR = ROOT_DIR / "models"
 DATA_DIR = ROOT_DIR / "web_data"
-PHOTO_DIR = DATA_DIR / "photos"
-MANIFEST_PATH = DATA_DIR / "photos.json"
 DATA_URL_RE = re.compile(r"^data:image/(?P<ext>png|jpeg|jpg);base64,(?P<data>.+)$")
+DEVICE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{12,80}$")
 
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 
 
 def init_storage():
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    PHOTO_DIR.mkdir(parents=True, exist_ok=True)
-    if not MANIFEST_PATH.exists():
-        save_manifest({"next_id": 1, "sessions": []})
 
 
-def load_manifest():
-    init_storage()
+def device_id_from_value(value):
+    device_id = value or ""
+    if not DEVICE_ID_RE.match(device_id):
+        raise ValueError("Missing or invalid device id.")
+    return device_id
+
+
+def device_paths(device_id):
+    device_dir = DATA_DIR / "devices" / device_id
+    return device_dir, device_dir / "photos", device_dir / "photos.json"
+
+
+def load_manifest(device_id):
+    _, _, manifest_path = device_paths(device_id)
     try:
-        return json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"next_id": 1, "sessions": []}
 
 
-def save_manifest(manifest):
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    temp_path = MANIFEST_PATH.with_suffix(".tmp")
+def save_manifest(device_id, manifest):
+    device_dir, photo_dir, manifest_path = device_paths(device_id)
+    device_dir.mkdir(parents=True, exist_ok=True)
+    photo_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = manifest_path.with_suffix(".tmp")
     temp_path.write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    temp_path.replace(MANIFEST_PATH)
+    temp_path.replace(manifest_path)
 
 
-def session_response(session):
+def session_response(session, device_id):
     shots = session["shotFilenames"]
     return {
         "id": session["id"],
         "createdAt": session["createdAt"],
-        "stripUrl": photo_url(session["stripFilename"]),
+        "stripUrl": photo_url(session["stripFilename"], device_id),
         "stripFilename": session["stripFilename"],
-        "shots": [photo_url(filename) for filename in shots],
+        "shots": [photo_url(filename, device_id) for filename in shots],
         "shotFilenames": shots,
     }
 
 
-def photo_url(filename):
-    return f"/saved/{filename}"
+def photo_url(filename, device_id):
+    return f"/saved/{filename}?device={quote(device_id)}"
 
 
 def decode_image(data_url):
@@ -90,7 +100,7 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             self.send_photos()
             return
         if parsed.path.startswith("/saved/"):
-            self.send_saved_photo(parsed.path.removeprefix("/saved/"))
+            self.send_saved_photo(parsed.path.removeprefix("/saved/"), parsed.query)
             return
         if parsed.path.startswith("/models/"):
             self.send_model_file(parsed.path.removeprefix("/models/"))
@@ -126,10 +136,17 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def send_saved_photo(self, filename):
+    def send_saved_photo(self, filename, query):
+        try:
+            device_id = device_id_from_value(parse_qs(query).get("device", [""])[0])
+        except ValueError as exc:
+            self.send_json({"error": str(exc)}, status=400)
+            return
+
         safe_name = Path(filename).name
-        target = (PHOTO_DIR / safe_name).resolve()
-        if not str(target).startswith(str(PHOTO_DIR.resolve())) or not target.exists():
+        _, photo_dir, _ = device_paths(device_id)
+        target = (photo_dir / safe_name).resolve()
+        if not str(target).startswith(str(photo_dir.resolve())) or not target.exists():
             self.send_json({"error": "Not found"}, status=404)
             return
         content_type = mimetypes.guess_type(str(target))[0] or "image/png"
@@ -155,12 +172,17 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def send_photos(self):
-        manifest = load_manifest()
-        sessions = [session_response(session) for session in manifest.get("sessions", [])]
-        self.send_json({"sessions": sessions})
+        try:
+            device_id = self.device_id_from_header()
+            manifest = load_manifest(device_id)
+            sessions = [session_response(session, device_id) for session in manifest.get("sessions", [])]
+            self.send_json({"sessions": sessions})
+        except ValueError as exc:
+            self.send_json({"error": str(exc)}, status=400)
 
     def save_photo_session(self):
         try:
+            device_id = self.device_id_from_header()
             body = self.read_json_body()
             shots = body.get("shots") or []
             strip = body.get("strip")
@@ -169,18 +191,20 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             timestamp = time.strftime("%Y%m%d_%H%M%S")
             unique = f"{timestamp}_{int((time.time() % 1) * 1000):03d}"
             shot_filenames = []
+            _, photo_dir, _ = device_paths(device_id)
+            photo_dir.mkdir(parents=True, exist_ok=True)
 
             for index, data_url in enumerate(shots, start=1):
                 ext, image_bytes = decode_image(data_url)
                 filename = f"shot_{unique}_{index}.{ext}"
-                (PHOTO_DIR / filename).write_bytes(image_bytes)
+                (photo_dir / filename).write_bytes(image_bytes)
                 shot_filenames.append(filename)
 
             ext, strip_bytes = decode_image(strip)
             strip_filename = f"strip_{unique}.{ext}"
-            (PHOTO_DIR / strip_filename).write_bytes(strip_bytes)
+            (photo_dir / strip_filename).write_bytes(strip_bytes)
             created_at = time.strftime("%Y-%m-%d %H:%M:%S")
-            manifest = load_manifest()
+            manifest = load_manifest(device_id)
             session_id = int(manifest.get("next_id", 1))
             session = {
                 "id": session_id,
@@ -190,20 +214,21 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             }
             manifest["next_id"] = session_id + 1
             manifest.setdefault("sessions", []).insert(0, session)
-            save_manifest(manifest)
+            save_manifest(device_id, manifest)
 
-            self.send_json(session_response(session), status=201)
+            self.send_json(session_response(session, device_id), status=201)
         except Exception as exc:
             self.send_json({"error": str(exc)}, status=400)
 
     def delete_photo_session(self, session_id):
         try:
+            device_id = self.device_id_from_header()
             session_id_int = int(session_id)
         except ValueError:
-            self.send_json({"error": "Invalid id"}, status=400)
+            self.send_json({"error": "Invalid id or device"}, status=400)
             return
 
-        manifest = load_manifest()
+        manifest = load_manifest(device_id)
         sessions = manifest.get("sessions", [])
         match_index = next(
             (index for index, session in enumerate(sessions) if int(session.get("id", -1)) == session_id_int),
@@ -214,14 +239,18 @@ class PhotoBoothHandler(BaseHTTPRequestHandler):
             return
 
         session = sessions.pop(match_index)
-        save_manifest(manifest)
+        save_manifest(device_id, manifest)
 
         filenames = [session["stripFilename"], *session["shotFilenames"]]
+        _, photo_dir, _ = device_paths(device_id)
         for filename in filenames:
-            target = PHOTO_DIR / Path(filename).name
+            target = photo_dir / Path(filename).name
             if target.exists():
                 target.unlink()
         self.send_json({"ok": True})
+
+    def device_id_from_header(self):
+        return device_id_from_value(self.headers.get("X-Photobooth-Device", ""))
 
     def read_json_body(self):
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -246,7 +275,7 @@ def main():
     server = ThreadingHTTPServer((HOST, PORT), PhotoBoothHandler)
     display_host = "127.0.0.1" if HOST == "0.0.0.0" else HOST
     print(f"PhotoBooth web app: http://{display_host}:{PORT}")
-    print(f"Data manifest: {MANIFEST_PATH}")
+    print(f"Data directory: {DATA_DIR}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

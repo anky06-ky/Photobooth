@@ -8,6 +8,7 @@ const PHOTO_FORMAT = "image/jpeg";
 const PHOTO_QUALITY = 0.82;
 const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 const BRAND_NAME = "MEMORY";
+const DEVICE_STORAGE_KEY = "memory_device_id";
 
 const camera = document.getElementById("camera");
 const previewCanvas = document.getElementById("previewCanvas");
@@ -70,6 +71,57 @@ async function parseResponse(response) {
   } catch (error) {
     return { error: text.slice(0, 180) || response.statusText };
   }
+}
+
+function createDeviceId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID().replace(/-/g, "");
+  }
+
+  if (window.crypto && typeof window.crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
+}
+
+function getDeviceId() {
+  let saved = "";
+  try {
+    saved = localStorage.getItem(DEVICE_STORAGE_KEY);
+  } catch (error) {
+    saved = "";
+  }
+
+  if (/^[a-zA-Z0-9_-]{12,80}$/.test(saved || "")) {
+    return saved;
+  }
+
+  const deviceId = createDeviceId();
+  try {
+    localStorage.setItem(DEVICE_STORAGE_KEY, deviceId);
+  } catch (error) {
+    console.warn("Device id storage failed", error);
+  }
+  return deviceId;
+}
+
+const deviceId = getDeviceId();
+
+function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("X-Photobooth-Device", deviceId);
+  return fetch(path, { ...options, headers });
+}
+
+function withDeviceParam(url) {
+  if (url.includes("device=")) {
+    return url;
+  }
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}device=${encodeURIComponent(deviceId)}`;
 }
 
 function updateProgress() {
@@ -665,7 +717,7 @@ async function saveSession() {
       throw new Error(`Anh qua nang (${(totalBytes / 1024 / 1024).toFixed(1)}MB)`);
     }
 
-    const response = await fetch("/api/photos", {
+    const response = await apiFetch("/api/photos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -694,7 +746,7 @@ async function saveSession() {
 async function loadGallery() {
   gallery.innerHTML = "";
   try {
-    const response = await fetch("/api/photos");
+    const response = await apiFetch("/api/photos");
     const payload = await parseResponse(response);
     if (!response.ok) {
       throw new Error(`${response.status} ${payload.error || response.statusText}`);
@@ -711,9 +763,10 @@ async function loadGallery() {
     for (const session of sessions) {
     const item = document.createElement("article");
     item.className = "gallery-item";
+    const stripUrl = withDeviceParam(session.stripUrl);
 
     const img = document.createElement("img");
-    img.src = session.stripUrl;
+    img.src = stripUrl;
     img.alt = `Strip ${session.id}`;
     item.appendChild(img);
 
@@ -729,7 +782,7 @@ async function loadGallery() {
 
     const download = document.createElement("a");
     const extension = (session.stripFilename.split(".").pop() || "jpg").toUpperCase();
-    download.href = session.stripUrl;
+    download.href = stripUrl;
     download.download = session.stripFilename;
     download.textContent = `Tai ${extension}`;
     actions.appendChild(download);
@@ -754,7 +807,7 @@ async function loadGallery() {
 }
 
 async function deleteSession(id) {
-  const response = await fetch(`/api/photos/${id}`, { method: "DELETE" });
+  const response = await apiFetch(`/api/photos/${id}`, { method: "DELETE" });
   if (response.ok) {
     await loadGallery();
     setStatus("Da xoa strip");

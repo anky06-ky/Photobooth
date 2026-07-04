@@ -2,8 +2,8 @@ import { connectLambda, getStore } from "@netlify/blobs";
 
 const DATA_STORE = "photobooth-data";
 const IMAGE_STORE = "photobooth-images";
-const MANIFEST_KEY = "photos.json";
 const DATA_URL_RE = /^data:image\/(?<ext>png|jpeg|jpg);base64,(?<data>.+)$/;
+const DEVICE_ID_RE = /^[a-zA-Z0-9_-]{12,80}$/;
 
 function jsonResponse(payload, statusCode = 200) {
   return {
@@ -54,34 +54,57 @@ function safeFilename(filename) {
   return clean;
 }
 
+function headerValue(headers, name) {
+  const match = Object.entries(headers || {}).find(([key]) => key.toLowerCase() === name);
+  return match ? match[1] : "";
+}
+
+function deviceIdFromEvent(event) {
+  const fromHeader = headerValue(event.headers, "x-photobooth-device");
+  const fromQuery = event.queryStringParameters && event.queryStringParameters.device;
+  const deviceId = String(fromHeader || fromQuery || "");
+  if (!DEVICE_ID_RE.test(deviceId)) {
+    throw new Error("Missing or invalid device id.");
+  }
+  return deviceId;
+}
+
 function imageContentType(filename) {
   return filename.toLowerCase().endsWith(".jpg") || filename.toLowerCase().endsWith(".jpeg")
     ? "image/jpeg"
     : "image/png";
 }
 
-function photoUrl(filename) {
-  return `/saved/${filename}`;
+function manifestKey(deviceId) {
+  return `devices/${deviceId}/photos.json`;
 }
 
-function sessionResponse(session) {
+function imageKey(deviceId, filename) {
+  return `devices/${deviceId}/images/${filename}`;
+}
+
+function photoUrl(filename, deviceId) {
+  return `/saved/${filename}?device=${encodeURIComponent(deviceId)}`;
+}
+
+function sessionResponse(session, deviceId) {
   return {
     id: session.id,
     createdAt: session.createdAt,
-    stripUrl: photoUrl(session.stripFilename),
+    stripUrl: photoUrl(session.stripFilename, deviceId),
     stripFilename: session.stripFilename,
-    shots: session.shotFilenames.map(photoUrl),
+    shots: session.shotFilenames.map((filename) => photoUrl(filename, deviceId)),
     shotFilenames: session.shotFilenames,
   };
 }
 
-async function loadManifest(dataStore) {
-  const manifest = await dataStore.get(MANIFEST_KEY, { type: "json" });
+async function loadManifest(dataStore, deviceId) {
+  const manifest = await dataStore.get(manifestKey(deviceId), { type: "json" });
   return manifest || { next_id: 1, sessions: [] };
 }
 
-async function saveManifest(dataStore, manifest) {
-  await dataStore.setJSON(MANIFEST_KEY, manifest);
+async function saveManifest(dataStore, deviceId, manifest) {
+  await dataStore.setJSON(manifestKey(deviceId), manifest);
 }
 
 function decodeImage(dataUrl) {
@@ -96,14 +119,14 @@ function decodeImage(dataUrl) {
   };
 }
 
-async function listSessions(dataStore) {
-  const manifest = await loadManifest(dataStore);
+async function listSessions(dataStore, deviceId) {
+  const manifest = await loadManifest(dataStore, deviceId);
   return jsonResponse({
-    sessions: manifest.sessions.map(sessionResponse),
+    sessions: manifest.sessions.map((session) => sessionResponse(session, deviceId)),
   });
 }
 
-async function saveSession(event, dataStore, imageStore) {
+async function saveSession(event, dataStore, imageStore, deviceId) {
   const body = JSON.parse(event.body || "{}");
   const shots = body.shots || [];
   const strip = body.strip;
@@ -120,7 +143,7 @@ async function saveSession(event, dataStore, imageStore) {
   for (let index = 0; index < shots.length; index += 1) {
     const image = decodeImage(shots[index]);
     const filename = `shot_${unique}_${index + 1}.${image.ext}`;
-    await imageStore.set(`images/${filename}`, image.bytes, {
+    await imageStore.set(imageKey(deviceId, filename), image.bytes, {
       metadata: { contentType: imageContentType(filename) },
     });
     shotFilenames.push(filename);
@@ -128,11 +151,11 @@ async function saveSession(event, dataStore, imageStore) {
 
   const stripImage = decodeImage(strip);
   const stripFilename = `strip_${unique}.${stripImage.ext}`;
-  await imageStore.set(`images/${stripFilename}`, stripImage.bytes, {
+  await imageStore.set(imageKey(deviceId, stripFilename), stripImage.bytes, {
     metadata: { contentType: imageContentType(stripFilename) },
   });
 
-  const manifest = await loadManifest(dataStore);
+  const manifest = await loadManifest(dataStore, deviceId);
   const sessionId = Number(manifest.next_id || 1);
   const session = {
     id: sessionId,
@@ -142,36 +165,36 @@ async function saveSession(event, dataStore, imageStore) {
   };
   manifest.next_id = sessionId + 1;
   manifest.sessions.unshift(session);
-  await saveManifest(dataStore, manifest);
+  await saveManifest(dataStore, deviceId, manifest);
 
-  return jsonResponse(sessionResponse(session), 201);
+  return jsonResponse(sessionResponse(session, deviceId), 201);
 }
 
-async function deleteSession(tail, dataStore, imageStore) {
+async function deleteSession(tail, dataStore, imageStore, deviceId) {
   const sessionId = Number(tail.replace("/", ""));
   if (!Number.isInteger(sessionId)) {
     return jsonResponse({ error: "Invalid id" }, 400);
   }
 
-  const manifest = await loadManifest(dataStore);
+  const manifest = await loadManifest(dataStore, deviceId);
   const index = manifest.sessions.findIndex((session) => Number(session.id) === sessionId);
   if (index === -1) {
     return notFound();
   }
 
   const [session] = manifest.sessions.splice(index, 1);
-  await saveManifest(dataStore, manifest);
+  await saveManifest(dataStore, deviceId, manifest);
 
   for (const filename of [session.stripFilename, ...session.shotFilenames]) {
-    await imageStore.delete(`images/${filename}`);
+    await imageStore.delete(imageKey(deviceId, filename));
   }
 
   return jsonResponse({ ok: true });
 }
 
-async function sendSavedPhoto(tail, imageStore) {
+async function sendSavedPhoto(tail, imageStore, deviceId) {
   const filename = safeFilename(tail.replace(/^\/saved\//, ""));
-  const bytes = await imageStore.get(`images/${filename}`, { type: "arrayBuffer" });
+  const bytes = await imageStore.get(imageKey(deviceId, filename), { type: "arrayBuffer" });
   if (bytes === null) {
     return notFound();
   }
@@ -193,23 +216,24 @@ export const handler = async (event) => {
     const tail = tailFromPath(event.path);
 
     if (event.httpMethod === "GET" && tail.startsWith("/saved/")) {
-      return sendSavedPhoto(tail, imageStore);
+      return sendSavedPhoto(tail, imageStore, deviceIdFromEvent(event));
     }
 
     if (event.httpMethod === "GET" && (tail === "" || tail === "/")) {
-      return listSessions(dataStore);
+      return listSessions(dataStore, deviceIdFromEvent(event));
     }
 
     if (event.httpMethod === "POST" && (tail === "" || tail === "/")) {
-      return saveSession(event, dataStore, imageStore);
+      return saveSession(event, dataStore, imageStore, deviceIdFromEvent(event));
     }
 
     if (event.httpMethod === "DELETE" && tail) {
-      return deleteSession(tail, dataStore, imageStore);
+      return deleteSession(tail, dataStore, imageStore, deviceIdFromEvent(event));
     }
 
     return notFound();
   } catch (error) {
-    return jsonResponse({ error: error.message || "Unexpected error" }, 500);
+    const statusCode = error.message === "Missing or invalid device id." ? 400 : 500;
+    return jsonResponse({ error: error.message || "Unexpected error" }, statusCode);
   }
 };
