@@ -13,10 +13,12 @@ body {
   margin: 0;
   min-height: 100vh;
   background: #141718;
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button {
-  min-height: 42px;
+  min-height: 46px;
   border: 1px solid #3f4948;
   border-radius: 8px;
   padding: 0 16px;
@@ -25,6 +27,7 @@ button {
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button:hover:not(:disabled) {
@@ -42,7 +45,7 @@ button:disabled {
   grid-template-columns: minmax(680px, 1fr) 360px;
   gap: 18px;
   min-height: 100vh;
-  padding: 18px;
+  padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
 }
 
 .work-area,
@@ -140,6 +143,7 @@ video {
   border-radius: 8px;
   background: #0b0e0f;
   touch-action: none;
+  user-select: none;
 }
 
 .button-row {
@@ -328,5 +332,110 @@ video {
 
   .gallery {
     max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    gap: 12px;
+    padding: max(12px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  }
+
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .eyebrow {
+    font-size: 12px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .status-pill {
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+    padding: 9px 10px;
+  }
+
+  .stage-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .camera-panel,
+  .puzzle-panel,
+  .progress-panel,
+  .library-panel {
+    border-radius: 8px;
+  }
+
+  .camera-panel,
+  .puzzle-panel,
+  .progress-panel,
+  .library-panel {
+    padding: 10px;
+  }
+
+  .video-wrap,
+  #puzzleCanvas {
+    width: min(100%, 92vw, 420px);
+    max-height: none;
+    margin-inline: auto;
+  }
+
+  .button-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .puzzle-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .puzzle-toolbar span {
+    grid-column: 1 / -1;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .side-panel {
+    gap: 12px;
+  }
+
+  .shot-list {
+    gap: 6px;
+  }
+
+  #acceptBtn,
+  #saveBtn,
+  .gallery-actions a,
+  .gallery-actions button {
+    min-height: 48px;
+  }
+
+  .gallery-item img {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 420px) {
+  h1 {
+    font-size: 22px;
+  }
+
+  button {
+    min-height: 48px;
+    padding: 0 12px;
+  }
+
+  .puzzle-toolbar {
+    grid-template-columns: 1fr;
   }
 }

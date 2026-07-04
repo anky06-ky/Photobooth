@@ -19,6 +19,8 @@ PHOTO_DIR = DATA_DIR / "photos"
 MANIFEST_PATH = DATA_DIR / "photos.json"
 DATA_URL_RE = re.compile(r"^data:image/(?P<ext>png|jpeg|jpg);base64,(?P<data>.+)$")
 
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
 
 def init_storage():
     DATA_DIR.mkdir(parents=True, exist_ok=True)

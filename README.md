@@ -32,6 +32,29 @@ Neu site bi 404, vao Netlify:
 Deploys -> Trigger deploy -> Clear cache and deploy site
 ```
 
+## Dung tren Android va iOS
+
+App da co PWA:
+
+- `web/manifest.webmanifest`
+- `web/sw.js`
+- meta tag rieng cho iOS
+- layout responsive cho man hinh dien thoai
+
+Android:
+
+1. Mo link Netlify bang Chrome.
+2. Bam menu 3 cham.
+3. Chon `Add to Home screen` hoac `Install app`.
+
+iOS:
+
+1. Mo link Netlify bang Safari.
+2. Bam nut Share.
+3. Chon `Add to Home Screen`.
+
+Camera tren dien thoai can HTTPS. Link Netlify co HTTPS san, con local `127.0.0.1` chi dung tren laptop.
+
 ## Cau truc
 
 ```text

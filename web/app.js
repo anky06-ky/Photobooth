@@ -1,7 +1,9 @@
 const SHOT_COUNT = 3;
-const PHOTO_SIZE = 720;
+const PHOTO_SIZE = window.matchMedia("(max-width: 760px)").matches ? 540 : 720;
 const BOARD_SIZE = 540;
 const GRID = 3;
+const CAMERA_IDEAL_WIDTH = window.matchMedia("(max-width: 760px)").matches ? 960 : 1280;
+const CAMERA_IDEAL_HEIGHT = window.matchMedia("(max-width: 760px)").matches ? 720 : 720;
 
 const camera = document.getElementById("camera");
 const previewCanvas = document.getElementById("previewCanvas");
@@ -22,6 +24,8 @@ const progressText = document.getElementById("progressText");
 const shotList = document.getElementById("shotList");
 const gallery = document.getElementById("gallery");
 
+previewCanvas.width = PHOTO_SIZE;
+previewCanvas.height = PHOTO_SIZE;
 const previewCtx = previewCanvas.getContext("2d");
 const puzzleCtx = puzzleCanvas.getContext("2d");
 
@@ -88,7 +92,7 @@ function drawEmptyPuzzle(message = "Chup anh de bat dau ghep") {
     puzzleCtx.stroke();
   }
   puzzleCtx.fillStyle = "#aeb9b7";
-  puzzleCtx.font = "700 20px system-ui, sans-serif";
+  puzzleCtx.font = `${window.matchMedia("(max-width: 420px)").matches ? "700 17px" : "700 20px"} system-ui, sans-serif`;
   puzzleCtx.textAlign = "center";
   puzzleCtx.fillText(message, BOARD_SIZE / 2, BOARD_SIZE / 2);
 }
@@ -97,18 +101,21 @@ async function startCamera() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: CAMERA_IDEAL_WIDTH },
+        height: { ideal: CAMERA_IDEAL_HEIGHT },
         facingMode: "user",
       },
       audio: false,
     });
     camera.srcObject = stream;
+    await camera.play();
     captureBtn.disabled = false;
     startCameraBtn.disabled = true;
     setStatus(`San sang chup tam ${acceptedShots.length + 1}/3`);
   } catch (error) {
-    setStatus("Khong mo duoc camera");
+    setStatus(location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1"
+      ? "Khong mo duoc camera"
+      : "Can HTTPS de mo camera");
     console.error(error);
   }
 }
@@ -718,6 +725,33 @@ async function deleteSession(id) {
   }
 }
 
+function stopCamera() {
+  if (!stream) {
+    return;
+  }
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+  stream = null;
+  camera.srcObject = null;
+  startCameraBtn.disabled = false;
+  captureBtn.disabled = true;
+  handControlsActive = false;
+  handStatus.textContent = "Tay: tat";
+  handBtn.textContent = "Bat dieu khien tay";
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => {
+      console.warn("Service worker registration failed", error);
+    });
+  });
+}
+
 startCameraBtn.addEventListener("click", startCamera);
 captureBtn.addEventListener("click", capturePhoto);
 retakeBtn.addEventListener("click", retakePhoto);
@@ -731,7 +765,14 @@ puzzleCanvas.addEventListener("pointerdown", startDrag);
 puzzleCanvas.addEventListener("pointermove", moveDrag);
 puzzleCanvas.addEventListener("pointerup", endDrag);
 puzzleCanvas.addEventListener("pointercancel", endDrag);
+window.addEventListener("pagehide", stopCamera);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    stopCamera();
+  }
+});
 
 drawEmptyPuzzle();
 updateProgress();
+registerServiceWorker();
 loadGallery();
