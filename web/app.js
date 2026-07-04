@@ -73,6 +73,10 @@ async function parseResponse(response) {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function createDeviceId() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
     return window.crypto.randomUUID().replace(/-/g, "");
@@ -734,8 +738,9 @@ async function saveSession() {
     updateProgress();
     captureBtn.disabled = !stream;
     drawEmptyPuzzle("Da luu - chup bo moi");
+    setStatus("Da luu, dang cap nhat thu vien");
+    await loadGallery(payload.id, 5);
     setStatus("Da luu strip vao thu vien");
-    await loadGallery();
   } catch (error) {
     console.error(error);
     setStatus(`Luu that bai: ${error.message}`);
@@ -743,7 +748,7 @@ async function saveSession() {
   }
 }
 
-async function loadGallery() {
+async function loadGallery(expectedId = null, retries = 0) {
   gallery.innerHTML = "";
   try {
     const response = await apiFetch("/api/photos");
@@ -752,6 +757,17 @@ async function loadGallery() {
       throw new Error(`${response.status} ${payload.error || response.statusText}`);
     }
     const sessions = payload.sessions || [];
+    const hasExpectedSession =
+      expectedId === null || sessions.some((session) => String(session.id) === String(expectedId));
+    if (!hasExpectedSession && retries > 0) {
+      const waiting = document.createElement("div");
+      waiting.className = "empty-state";
+      waiting.textContent = "Dang cap nhat thu vien...";
+      gallery.appendChild(waiting);
+      await sleep(1500);
+      return loadGallery(expectedId, retries - 1);
+    }
+
     if (!sessions.length) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
