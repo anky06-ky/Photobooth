@@ -1,7 +1,0 @@
-.git/
-__pycache__/
-*.py[cod]
-photos/
-web_data/
-_video_frames/
-puzzlecam_strip.png
