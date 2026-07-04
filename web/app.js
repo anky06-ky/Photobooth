@@ -1,14 +1,25 @@
 const SHOT_COUNT = 3;
-const PHOTO_SIZE = window.matchMedia("(max-width: 760px)").matches ? 540 : 720;
+const PHOTO_SIZE = window.matchMedia("(max-width: 760px)").matches ? 720 : 960;
 const BOARD_SIZE = 540;
 const GRID = 3;
-const CAMERA_IDEAL_WIDTH = window.matchMedia("(max-width: 760px)").matches ? 960 : 1280;
-const CAMERA_IDEAL_HEIGHT = window.matchMedia("(max-width: 760px)").matches ? 720 : 720;
+const CAMERA_IDEAL_WIDTH = 1280;
+const CAMERA_IDEAL_HEIGHT = window.matchMedia("(max-width: 760px)").matches ? 960 : 720;
 const PHOTO_FORMAT = "image/jpeg";
-const PHOTO_QUALITY = 0.82;
-const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
+const CAPTURE_QUALITY = 0.94;
+const PHOTO_QUALITY = 0.91;
+const MAX_UPLOAD_BYTES = 5.2 * 1024 * 1024;
 const BRAND_NAME = "MEMORY";
 const DEVICE_STORAGE_KEY = "memory_device_id";
+const CARD_WIDTH = 540;
+const CARD_HEIGHT = 720;
+const CARD_PADDING = 40;
+const CARD_PHOTO_SIZE = 460;
+const CARD_BRAND_Y = 610;
+const CARD_TIME_Y = 666;
+const STRIP_WIDTH = 600;
+const STRIP_GAP = 28;
+const STRIP_PADDING_X = 30;
+const STRIP_PADDING_Y = 26;
 
 const camera = document.getElementById("camera");
 const previewCanvas = document.getElementById("previewCanvas");
@@ -33,6 +44,8 @@ previewCanvas.width = PHOTO_SIZE;
 previewCanvas.height = PHOTO_SIZE;
 const previewCtx = previewCanvas.getContext("2d");
 const puzzleCtx = puzzleCanvas.getContext("2d");
+setHighQuality(previewCtx);
+setHighQuality(puzzleCtx);
 
 let stream = null;
 let currentPhoto = null;
@@ -57,6 +70,40 @@ function setStatus(text) {
 
 function canvasToUploadUrl(canvas, quality = PHOTO_QUALITY) {
   return canvas.toDataURL(PHOTO_FORMAT, quality);
+}
+
+function setHighQuality(ctx) {
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("Cannot read image blob."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function canvasToUploadUrlAsync(canvas, quality = PHOTO_QUALITY) {
+  if (!canvas.toBlob) {
+    return Promise.resolve(canvasToUploadUrl(canvas, quality));
+  }
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Cannot encode image."));
+          return;
+        }
+        blobToDataUrl(blob).then(resolve, reject);
+      },
+      PHOTO_FORMAT,
+      quality
+    );
+  });
 }
 
 function dataUrlBytes(dataUrl) {
@@ -216,7 +263,7 @@ function capturePhoto() {
   previewCtx.drawImage(camera, sx, sy, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
   previewCtx.restore();
 
-  currentPhoto = canvasToUploadUrl(previewCanvas, 0.86);
+  currentPhoto = canvasToUploadUrl(previewCanvas, CAPTURE_QUALITY);
   createPuzzle(currentPhoto);
   captureBtn.disabled = true;
   retakeBtn.disabled = false;
@@ -643,20 +690,21 @@ function handleHandLike(isLike) {
 function makePhotoCard(dataUrl, shotNumber) {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  canvas.width = 270;
-  canvas.height = 360;
+  setHighQuality(ctx);
+  canvas.width = CARD_WIDTH;
+  canvas.height = CARD_HEIGHT;
   ctx.fillStyle = "#f2eadc";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   return loadImage(dataUrl).then((image) => {
-    ctx.drawImage(image, 20, 20, 230, 230);
+    ctx.drawImage(image, CARD_PADDING, CARD_PADDING, CARD_PHOTO_SIZE, CARD_PHOTO_SIZE);
     ctx.fillStyle = "#181513";
-    ctx.font = "700 22px system-ui, sans-serif";
+    ctx.font = "800 42px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(BRAND_NAME, canvas.width / 2, 305);
-    ctx.font = "600 15px system-ui, sans-serif";
-    ctx.fillText(`Tam ${shotNumber}/3 - ${new Date().toLocaleTimeString()}`, canvas.width / 2, 332);
-    return canvasToUploadUrl(canvas, PHOTO_QUALITY);
+    ctx.fillText(BRAND_NAME, canvas.width / 2, CARD_BRAND_Y);
+    ctx.font = "700 27px system-ui, sans-serif";
+    ctx.fillText(`Tam ${shotNumber}/3 - ${new Date().toLocaleTimeString()}`, canvas.width / 2, CARD_TIME_Y);
+    return canvasToUploadUrlAsync(canvas, PHOTO_QUALITY);
   });
 }
 
@@ -695,16 +743,17 @@ async function acceptCurrentShot() {
 async function makeStrip() {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  canvas.width = 300;
-  canvas.height = SHOT_COUNT * 380 + 20;
+  setHighQuality(ctx);
+  canvas.width = STRIP_WIDTH;
+  canvas.height = STRIP_PADDING_Y * 2 + SHOT_COUNT * CARD_HEIGHT + (SHOT_COUNT - 1) * STRIP_GAP;
   ctx.fillStyle = "#f2eadc";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   for (let i = 0; i < acceptedShots.length; i += 1) {
     const image = await loadImage(acceptedShots[i].dataUrl);
-    ctx.drawImage(image, 15, 10 + i * 380, 270, 360);
+    ctx.drawImage(image, STRIP_PADDING_X, STRIP_PADDING_Y + i * (CARD_HEIGHT + STRIP_GAP), CARD_WIDTH, CARD_HEIGHT);
   }
-  return canvasToUploadUrl(canvas, PHOTO_QUALITY);
+  return canvasToUploadUrlAsync(canvas, PHOTO_QUALITY);
 }
 
 async function saveSession() {
@@ -713,8 +762,9 @@ async function saveSession() {
   }
 
   saveBtn.disabled = true;
-  setStatus("Dang luu vao thu vien");
+  setStatus("Dang toi uu anh");
   try {
+    await sleep(40);
     const strip = await makeStrip();
     const totalBytes = acceptedShots.reduce((sum, shot) => sum + dataUrlBytes(shot.dataUrl), 0) + dataUrlBytes(strip);
     if (totalBytes > MAX_UPLOAD_BYTES) {
