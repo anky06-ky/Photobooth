@@ -4,6 +4,9 @@ const BOARD_SIZE = 540;
 const GRID = 3;
 const CAMERA_IDEAL_WIDTH = window.matchMedia("(max-width: 760px)").matches ? 960 : 1280;
 const CAMERA_IDEAL_HEIGHT = window.matchMedia("(max-width: 760px)").matches ? 720 : 720;
+const PHOTO_FORMAT = "image/jpeg";
+const PHOTO_QUALITY = 0.82;
+const MAX_UPLOAD_BYTES = 4.5 * 1024 * 1024;
 
 const camera = document.getElementById("camera");
 const previewCanvas = document.getElementById("previewCanvas");
@@ -48,6 +51,24 @@ let likeCooldownUntil = 0;
 
 function setStatus(text) {
   statusText.textContent = text;
+}
+
+function canvasToUploadUrl(canvas, quality = PHOTO_QUALITY) {
+  return canvas.toDataURL(PHOTO_FORMAT, quality);
+}
+
+function dataUrlBytes(dataUrl) {
+  const base64 = (dataUrl || "").split(",")[1] || "";
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+async function parseResponse(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch (error) {
+    return { error: text.slice(0, 180) || response.statusText };
+  }
 }
 
 function updateProgress() {
@@ -138,7 +159,7 @@ function capturePhoto() {
   previewCtx.drawImage(camera, sx, sy, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
   previewCtx.restore();
 
-  currentPhoto = previewCanvas.toDataURL("image/png");
+  currentPhoto = canvasToUploadUrl(previewCanvas, 0.86);
   createPuzzle(currentPhoto);
   captureBtn.disabled = true;
   retakeBtn.disabled = false;
@@ -578,7 +599,7 @@ function makePhotoCard(dataUrl, shotNumber) {
     ctx.fillText("PUZZLE-CAM", canvas.width / 2, 305);
     ctx.font = "600 15px system-ui, sans-serif";
     ctx.fillText(`Tam ${shotNumber}/3 - ${new Date().toLocaleTimeString()}`, canvas.width / 2, 332);
-    return canvas.toDataURL("image/png");
+    return canvasToUploadUrl(canvas, PHOTO_QUALITY);
   });
 }
 
@@ -626,7 +647,7 @@ async function makeStrip() {
     const image = await loadImage(acceptedShots[i].dataUrl);
     ctx.drawImage(image, 15, 10 + i * 380, 270, 360);
   }
-  return canvas.toDataURL("image/png");
+  return canvasToUploadUrl(canvas, PHOTO_QUALITY);
 }
 
 async function saveSession() {
@@ -638,6 +659,11 @@ async function saveSession() {
   setStatus("Dang luu vao thu vien");
   try {
     const strip = await makeStrip();
+    const totalBytes = acceptedShots.reduce((sum, shot) => sum + dataUrlBytes(shot.dataUrl), 0) + dataUrlBytes(strip);
+    if (totalBytes > MAX_UPLOAD_BYTES) {
+      throw new Error(`Anh qua nang (${(totalBytes / 1024 / 1024).toFixed(1)}MB)`);
+    }
+
     const response = await fetch("/api/photos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -646,9 +672,9 @@ async function saveSession() {
         strip,
       }),
     });
-    const payload = await response.json();
+    const payload = await parseResponse(response);
     if (!response.ok) {
-      throw new Error(payload.error || "Save failed");
+      throw new Error(`${response.status} ${payload.error || response.statusText || "Save failed"}`);
     }
 
     acceptedShots = [];
@@ -659,25 +685,29 @@ async function saveSession() {
     await loadGallery();
   } catch (error) {
     console.error(error);
-    setStatus("Luu that bai");
+    setStatus(`Luu that bai: ${error.message}`);
     saveBtn.disabled = false;
   }
 }
 
 async function loadGallery() {
-  const response = await fetch("/api/photos");
-  const payload = await response.json();
-  const sessions = payload.sessions || [];
   gallery.innerHTML = "";
-  if (!sessions.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.textContent = "Chua co strip nao duoc luu.";
-    gallery.appendChild(empty);
-    return;
-  }
+  try {
+    const response = await fetch("/api/photos");
+    const payload = await parseResponse(response);
+    if (!response.ok) {
+      throw new Error(`${response.status} ${payload.error || response.statusText}`);
+    }
+    const sessions = payload.sessions || [];
+    if (!sessions.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "Chua co strip nao duoc luu.";
+      gallery.appendChild(empty);
+      return;
+    }
 
-  for (const session of sessions) {
+    for (const session of sessions) {
     const item = document.createElement("article");
     item.className = "gallery-item";
 
@@ -712,6 +742,12 @@ async function loadGallery() {
     meta.appendChild(actions);
     item.appendChild(meta);
     gallery.appendChild(item);
+    }
+  } catch (error) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = `Khong tai duoc thu vien: ${error.message}`;
+    gallery.appendChild(empty);
   }
 }
 
@@ -721,7 +757,8 @@ async function deleteSession(id) {
     await loadGallery();
     setStatus("Da xoa strip");
   } else {
-    setStatus("Xoa that bai");
+    const payload = await parseResponse(response);
+    setStatus(`Xoa that bai: ${payload.error || response.status}`);
   }
 }
 
